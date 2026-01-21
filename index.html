@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>堆塔游戏</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            overflow: hidden;
+            background: linear-gradient(135deg, #f95240 0%, #ff8a65 100%);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            touch-action: none;
+            height: 100vh;
+            width: 100vw;
+        }
+
+        #canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+        }
+
+        .ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        #score-container {
+            position: absolute;
+            top: 10%;
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+            opacity: 0.9;
+        }
+
+        #score {
+            font-size: 80px;
+            font-weight: 200;
+            color: white;
+            text-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            font-family: "Helvetica Neue", sans-serif;
+        }
+
+        #score-label {
+            font-size: 16px;
+            color: rgba(255,255,255,0.8);
+            letter-spacing: 2px;
+            margin-bottom: 5px;
+            display: none; /* Make it cleaner, or show if user wants */
+        }
+
+        #game-over-modal {
+            display: none;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
+            z-index: 10;
+            pointer-events: auto;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .modal-content {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 40px;
+            border-radius: 24px;
+            text-align: center;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.3);
+            width: 80%;
+            max-width: 320px;
+            transform: scale(0.9);
+            animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+
+        h2 {
+            margin: 0 0 10px;
+            font-size: 32px;
+            color: #333;
+        }
+
+        .score-result {
+            margin: 20px 0;
+        }
+
+        .score-result .label {
+            font-size: 14px;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .score-result .value {
+            font-size: 48px;
+            font-weight: bold;
+            color: #f95240;
+        }
+
+        .btn {
+            background: #f95240;
+            color: white;
+            border: none;
+            padding: 16px 32px;
+            font-size: 18px;
+            border-radius: 50px;
+            cursor: pointer;
+            outline: none;
+            transition: transform 0.1s, background 0.2s, box-shadow 0.2s;
+            font-weight: 600;
+            width: 100%;
+            box-shadow: 0 10px 20px rgba(249, 82, 64, 0.3);
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .btn:active {
+            transform: scale(0.95);
+            background: #e64a38;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes popIn {
+            from { transform: scale(0.8); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+
+        /* Instructions */
+        #start-hint {
+            position: absolute;
+            bottom: 20%;
+            left: 0;
+            width: 100%;
+            text-align: center;
+            color: white;
+            font-size: 20px;
+            opacity: 0.8;
+            pointer-events: none;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 0.5; transform: scale(0.95); }
+            50% { opacity: 1; transform: scale(1.05); }
+            100% { opacity: 0.5; transform: scale(0.95); }
+        }
+    </style>
+</head>
+<body>
+
+<canvas id="canvas"></canvas>
+
+<div class="ui-layer">
+    <div id="score-container">
+        <div id="score">0</div>
+    </div>
+    
+    <div id="start-hint">点击屏幕开始游戏</div>
+
+    <div id="game-over-modal">
+        <div class="modal-content">
+            <h2>游戏结束</h2>
+            <div class="score-result">
+                <div class="label">本次得分</div>
+                <div class="value" id="final-score">0</div>
+            </div>
+            <button class="btn" id="restart-btn">再玩一次</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Configuration
+    const CONFIG = {
+        zoom: 2, // Camera zoom level (smaller = further away)
+        baseSize: 50, // Logical size for calculations
+        height: 100, // Logical height of block
+        speed: 1.5, // Initial speed
+        speedIncrement: 0.05,
+        maxSpeed: 4.5,
+    };
+
+    const COLORS = [
+        '#d32f2f', '#c2185b', '#7b1fa2', '#512da8', 
+        '#303f9f', '#1976d2', '#0288d1', '#0097a7', 
+        '#00796b', '#388e3c', '#689f38', '#afb42b', 
+        '#fbc02d', '#ffa000', '#f57c00', '#e64a19'
+    ];
+    
+    // Original game color palette approximation
+    const BG_COLOR_TOP = '#f95240';
+    const BG_COLOR_BOTTOM = '#ff8a65';
+
+    // State
+    const state = {
+        blocks: [],
+        currentBlock: null,
+        score: 0,
+        isRunning: false,
+        gameEnded: false,
+        camera: { x: 0, y: 0, z: 0, targetY: 0 },
+        axis: 'x', // 'x' or 'z'
+        direction: 1, // 1 or -1
+        speed: CONFIG.speed
+    };
+
+    // DOM Elements
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const scoreEl = document.getElementById('score');
+    const gameOverModal = document.getElementById('game-over-modal');
+    const finalScoreEl = document.getElementById('final-score');
+    const restartBtn = document.getElementById('restart-btn');
+    const startHint = document.getElementById('start-hint');
+
+    let width, height;
+    let factor = 1; // logical unit to pixel
+
+    function resize() {
+        width = window.innerWidth;
+        height = window.innerHeight;
+        
+        // Handle High DPI screens
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = width * dpr;
+        canvas.height = height * dpr;
+        
+        // Normalize context
+        ctx.scale(dpr, dpr);
+        
+        // Recalculate factor to keep game scale consistent on different screens
+        // We want the base block to be roughly 1/3 of screen width? No too big.
+        // Let's say we want logic unit 100 to be maybe 20% of screen width?
+        // Let's try constant scale based on easier relative sizing.
+        factor = Math.min(width, height) / 400 * CONFIG.zoom;
+        
+        if (!state.isRunning && state.blocks.length > 0) {
+            render();
+        }
+    }
+
+    // Isometic Projection
+    function project(x, y, z) {
+        // Simple isometric projection
+        // x goes right-down, z goes left-down, y goes up
+        
+        const isoX = (x - z) * Math.cos(Math.PI / 6);
+        const isoY = (x + z) * Math.sin(Math.PI / 6) - y;
+        
+        // Screen Space conversion
+        const screenX = width / 2 + isoX * factor;
+        const screenY = height / 1.5 + isoY * factor + state.camera.y * factor;
+        
+        return { x: screenX, y: screenY };
+    }
+
+    function colorLuminance(hex, lum) {
+        // Validate hex string
+        hex = String(hex).replace(/[^0-9a-f]/gi, '');
+        if (hex.length < 6) {
+            hex = hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2];
+        }
+        lum = lum || 0;
+
+        // Convert to decimal and change luminosity
+        let rgb = "#", c, i;
+        for (i = 0; i < 3; i++) {
+            c = parseInt(hex.substr(i*2,2), 16);
+            c = Math.round(Math.min(Math.max(0, c + (c * lum)), 255)).toString(16);
+            rgb += ("00"+c).substr(c.length);
+        }
+        return rgb;
+    }
+
+    function drawBlock(block, isCurrent = false) {
+        const { x, y, z, w, d, color } = block;
+        
+        // We render it as a 3D box
+        //    p1-------p2
+        //   /|       /|
+        //  p4-------p3|
+        //  | p1_b----|p2_b
+        //  |/        |/
+        //  p4_b-----p3_b
+        
+        // Logical height of block visual
+        const visualHeight = 15; // Logical units
+
+        const topFace = [
+            project(x, y, z),          // back
+            project(x + w, y, z),      // right
+            project(x + w, y, z + d),  // front
+            project(x, y, z + d)       // left
+        ];
+        
+        const bottomFace = [
+            project(x, y - visualHeight, z),
+            project(x + w, y - visualHeight, z),
+            project(x + w, y - visualHeight, z + d),
+            project(x, y - visualHeight, z + d)
+        ];
+
+        // Draw sides
+        // Right Side (visible from front-right)
+        ctx.fillStyle = colorLuminance(color, -0.2); // Darker
+        ctx.beginPath();
+        ctx.moveTo(topFace[1].x, topFace[1].y);
+        ctx.lineTo(topFace[2].x, topFace[2].y);
+        ctx.lineTo(bottomFace[2].x, bottomFace[2].y);
+        ctx.lineTo(bottomFace[1].x, bottomFace[1].y);
+        ctx.closePath();
+        ctx.fill();
+
+        // Left Side (visible from front-left)
+        ctx.fillStyle = colorLuminance(color, -0.4); // Darkest
+        ctx.beginPath();
+        ctx.moveTo(topFace[3].x, topFace[3].y);
+        ctx.lineTo(topFace[2].x, topFace[2].y);
+        ctx.lineTo(bottomFace[2].x, bottomFace[2].y);
+        ctx.lineTo(bottomFace[3].x, bottomFace[3].y);
+        ctx.closePath();
+        ctx.fill();
+
+        // Top Face
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.moveTo(topFace[0].x, topFace[0].y);
+        ctx.lineTo(topFace[1].x, topFace[1].y);
+        ctx.lineTo(topFace[2].x, topFace[2].y);
+        ctx.lineTo(topFace[3].x, topFace[3].y);
+        ctx.closePath();
+        ctx.fill();
+
+        // Highlight edges
+        ctx.strokeStyle = "rgba(255,255,255,0.1)";
+        ctx.lineWidth = 1;
+        ctx.stroke();
+    }
+
+    // Debris Particle System
+    let debris = [];
+    function createDebris(x, z, w, d, y, color) {
+        debris.push({
+            x, y, z, w, d, color,
+            vy: 0,
+            ay: -4, // gravity (logical units per frame^2) - increased to fall faster
+            life: 60
+        });
+    }
+
+    function updateDebris() {
+        for (let i = debris.length - 1; i >= 0; i--) {
+            const p = debris[i];
+            p.y += p.vy;
+            p.vy += p.ay * 0.05; // time step
+            p.life--;
+            if (p.life <= 0 || p.y < -500) {
+                debris.splice(i, 1);
+            }
+        }
+    }
+
+    function renderDebris() {
+        debris.forEach(p => drawBlock(p));
+    }
+
+    function initGame() {
+        state.blocks = [];
+        state.score = 0;
+        state.isRunning = true;
+        state.gameEnded = false;
+        state.camera.y = 0;
+        state.camera.targetY = 0;
+        state.axis = 'x';
+        state.direction = 1;
+        state.speed = CONFIG.speed;
+        
+        scoreEl.innerText = '0';
+        gameOverModal.style.display = 'none';
+        startHint.style.display = 'none';
+
+        debris = [];
+
+        // Foundation block
+        const baseWidth = 120;
+        state.blocks.push({
+            x: -baseWidth/2,
+            z: -baseWidth/2,
+            y: 0,
+            w: baseWidth,
+            d: baseWidth,
+            color: COLORS[0]
+        });
+
+        spawnNextBlock();
+        
+        loop();
+    }
+
+    function spawnNextBlock() {
+        const prevBlock = state.blocks[state.blocks.length - 1];
+        const newColor = COLORS[state.blocks.length % COLORS.length];
+        
+        state.currentBlock = {
+            x: -200, // Placeholder
+            z: -200, 
+            y: (state.blocks.length) * 15, // 15 logical units height
+            w: prevBlock.w,
+            d: prevBlock.d,
+            color: newColor
+        };
+
+        // Determine spawn position based on axis
+        const range = 200; // spawn distance
+        if (state.axis === 'x') {
+            state.currentBlock.x = -range;
+            state.currentBlock.z = prevBlock.z;
+        } else {
+            state.currentBlock.z = -range;
+            state.currentBlock.x = prevBlock.x;
+        }
+        
+        state.direction = 1;
+    }
+
+    function placeBlock() {
+        if (!state.isRunning) {
+            if (state.gameEnded) return; // Wait for restart
+            initGame();
+            return;
+        }
+
+        const current = state.currentBlock;
+        const prev = state.blocks[state.blocks.length - 1];
+        
+        let delta;
+        let overlap;
+        
+        // Calculate overlap and cut
+        if (state.axis === 'x') {
+            delta = current.x - prev.x;
+            
+            // Allow small margin of error for "perfect" feel
+            if (Math.abs(delta) < 3) {
+                current.x = prev.x;
+                delta = 0;
+            }
+
+            if (Math.abs(delta) >= prev.w) {
+                return gameOver();
+            }
+            
+            // Trim
+            if (delta > 0) {
+                // Slipped right
+                // ______
+                //    _______
+                //    |xx|///|
+                overlap = prev.w - delta;
+                current.w = overlap;
+                // Debris: starts at current.x + overlap, width = delta
+                createDebris(current.x + overlap, current.z, delta, current.d, current.y, current.color);
+            } else if (delta < 0) {
+                 // Slipped left
+                overlap = prev.w + delta;
+                current.w = overlap;
+                current.x = prev.x; // Shift visual position to align with prev left edge
+                // Debris: starts at prev.x - abs(delta), width = abs(delta)
+                createDebris(prev.x - Math.abs(delta) + prev.w, current.z, Math.abs(delta), current.d, current.y, current.color);
+                
+                // wait, logic for left slip:
+                // Prev:   [      ]
+                // Curr: [      ]
+                // Overlap is the right part of Curr and left part of Prev.
+                // Current's effective X becomes Prev.x
+                // Current's Width becomes overlap.
+                // Debris is the left part of Curr that missed.
+                // Debris X = current.x original
+                // Debris Width = -delta
+                // Correct logic:
+                // If delta < 0 (left):
+                // keep current.x as is? No, visual must be aligned.
+                // Actual kept block: x = prev.x, w = prev.w + delta
+                // Debris: x = current.x (original), w = -delta
+                
+                const originalX = current.x;
+                current.x = prev.x; 
+                createDebris(originalX, current.z, -delta, current.d, current.y, current.color);
+            }
+        } else {
+            // Z Axis
+            delta = current.z - prev.z;
+            
+             if (Math.abs(delta) < 3) {
+                current.z = prev.z;
+                delta = 0;
+            }
+
+            if (Math.abs(delta) >= prev.d) {
+                return gameOver();
+            }
+            
+            if (delta > 0) {
+                // Slipped "front" (z+)
+                overlap = prev.d - delta;
+                current.d = overlap;
+                createDebris(current.x, current.z + overlap, current.w, delta, current.y, current.color);
+            } else if (delta < 0) {
+                // Slipped "back" (z-)
+                overlap = prev.d + delta;
+                const originalZ = current.z;
+                current.z = prev.z;
+                current.d = overlap;
+                createDebris(current.x, originalZ, current.w, -delta, current.y, current.color);
+            }
+        }
+        
+        state.blocks.push(current);
+        state.score++;
+        scoreEl.textContent = state.score;
+        
+        // Speed up
+        state.speed = Math.min(state.speed + CONFIG.speedIncrement, CONFIG.maxSpeed);
+
+        // Switch axis
+        state.axis = state.axis === 'x' ? 'z' : 'x';
+        
+        // Move camera target
+        state.camera.targetY += 15; 
+        
+        spawnNextBlock();
+    }
+
+    function gameOver() {
+        state.isRunning = false;
+        state.gameEnded = true;
+        
+        // Let the current block fall as debris
+        const c = state.currentBlock;
+        createDebris(c.x, c.z, c.w, c.d, c.y, c.color);
+        state.currentBlock = null;
+        
+        setTimeout(() => {
+            finalScoreEl.innerText = state.score;
+            gameOverModal.style.display = 'flex';
+        }, 500);
+    }
+
+    function update() {
+        if (!state.isRunning) return;
+        
+        const current = state.currentBlock;
+        const range = 210; // bit more than spawn range to allow overshoot
+        
+        if (state.axis === 'x') {
+            current.x += state.speed * state.direction;
+            if (current.x > range || current.x < -range) {
+                state.direction *= -1;
+            }
+        } else {
+            current.z += state.speed * state.direction;
+            if (current.z > range || current.z < -range) {
+                state.direction *= -1;
+            }
+        }
+    }
+    
+    function cameraLogic() {
+         state.camera.y += (state.camera.targetY - state.camera.y) * 0.1;
+    }
+
+    function render() {
+        // Clear
+        ctx.clearRect(0, 0, width, height);
+
+        // Render Blocks
+        state.blocks.forEach(block => drawBlock(block));
+        
+        // Render Debris
+        renderDebris();
+
+        // Render Current
+        if (state.currentBlock) {
+            drawBlock(state.currentBlock, true);
+        }
+    }
+
+    function loop() {
+        if (state.isRunning) {
+            update();
+        }
+        updateDebris();
+        cameraLogic();
+        render();
+        
+        if (state.isRunning || debris.length > 0) {
+            requestAnimationFrame(loop);
+        }
+    }
+
+    // Input Handling
+    function handleInput(e) {
+        if (e.target === restartBtn) return;
+        if (state.gameEnded) return;
+        
+        e.preventDefault();
+        
+        if (!state.isRunning && !state.gameEnded) {
+            initGame();
+        } else {
+            placeBlock();
+        }
+    }
+
+    window.addEventListener('resize', resize);
+    window.addEventListener('orientationchange', () => setTimeout(resize, 100));
+    
+    document.body.addEventListener('mousedown', (e) => {
+        if(e.button === 0) handleInput(e);
+    });
+    
+    document.body.addEventListener('touchstart', handleInput, {passive: false});
+    
+    document.addEventListener('keydown', (e) => {
+        if (e.code === 'Space') handleInput(e);
+    });
+
+    restartBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        initGame();
+    });
+
+    // Initial Setup
+    resize();
+    // Don't auto start, wait for click
+    // Draw initial scene
+    state.currentBlock = null;
+    state.blocks = [{
+        x: -60, z: -60, y: 0, w: 120, d: 120, color: COLORS[0]
+    }];
+    render();
+
+</script>
+</body>
+</html>
