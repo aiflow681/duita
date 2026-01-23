@@ -39,7 +39,7 @@
 
         #score-container {
             position: absolute;
-            top: 10%;
+            top: 8%;
             left: 50%;
             transform: translateX(-50%);
             text-align: center;
@@ -47,7 +47,7 @@
         }
 
         #score {
-            font-size: 80px;
+            font-size: clamp(48px, 12vw, 80px);
             font-weight: 200;
             color: white;
             text-shadow: 0 2px 10px rgba(0,0,0,0.2);
@@ -82,11 +82,11 @@
 
         .modal-content {
             background: rgba(255, 255, 255, 0.95);
-            padding: 40px;
+            padding: clamp(24px, 6vw, 40px);
             border-radius: 24px;
             text-align: center;
             box-shadow: 0 20px 50px rgba(0,0,0,0.3);
-            width: 80%;
+            width: 85%;
             max-width: 320px;
             transform: scale(0.9);
             animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
@@ -94,23 +94,23 @@
 
         h2 {
             margin: 0 0 10px;
-            font-size: 32px;
+            font-size: clamp(24px, 6vw, 32px);
             color: #333;
         }
 
         .score-result {
-            margin: 20px 0;
+            margin: clamp(12px, 4vw, 20px) 0;
         }
 
         .score-result .label {
-            font-size: 14px;
+            font-size: clamp(12px, 3vw, 14px);
             color: #888;
             text-transform: uppercase;
             letter-spacing: 1px;
         }
 
         .score-result .value {
-            font-size: 48px;
+            font-size: clamp(36px, 10vw, 48px);
             font-weight: bold;
             color: #f95240;
         }
@@ -119,8 +119,8 @@
             background: #f95240;
             color: white;
             border: none;
-            padding: 16px 32px;
-            font-size: 18px;
+            padding: clamp(12px, 3vw, 16px) clamp(24px, 6vw, 32px);
+            font-size: clamp(16px, 4vw, 18px);
             border-radius: 50px;
             cursor: pointer;
             outline: none;
@@ -149,15 +149,16 @@
         /* Instructions */
         #start-hint {
             position: absolute;
-            bottom: 20%;
+            bottom: 15%;
             left: 0;
             width: 100%;
             text-align: center;
             color: white;
-            font-size: 20px;
+            font-size: clamp(16px, 4vw, 20px);
             opacity: 0.8;
             pointer-events: none;
             animation: pulse 2s infinite;
+            padding: 0 20px;
         }
 
         @keyframes pulse {
@@ -236,10 +237,14 @@
 
     let width, height;
     let factor = 1; // logical unit to pixel
+    let isPortrait = false;
 
     function resize() {
         width = window.innerWidth;
         height = window.innerHeight;
+        
+        // Detect orientation
+        isPortrait = height > width;
         
         // Handle High DPI screens
         const dpr = window.devicePixelRatio || 1;
@@ -249,11 +254,19 @@
         // Normalize context
         ctx.scale(dpr, dpr);
         
-        // Recalculate factor to keep game scale consistent on different screens
-        // We want the base block to be roughly 1/3 of screen width? No too big.
-        // Let's say we want logic unit 100 to be maybe 20% of screen width?
-        // Let's try constant scale based on easier relative sizing.
-        factor = Math.min(width, height) / 400 * CONFIG.zoom;
+        // Adaptive scaling for mobile portrait mode
+        // The base block is 120 logical units wide
+        // In isometric view, it spans roughly 120 * cos(30°) ≈ 104 units horizontally
+        // We need to fit this within the screen width with some margin
+        if (isPortrait) {
+            // Portrait: scale to fit the base block width (120 units) within 80% of screen width
+            // Account for isometric projection: diagonal span is larger
+            const baseBlockDiagonal = 120 * Math.sqrt(2); // ~170 units
+            factor = (width * 0.75) / baseBlockDiagonal;
+        } else {
+            // Landscape: use traditional scaling
+            factor = Math.min(width, height) / 400 * CONFIG.zoom;
+        }
         
         if (!state.isRunning && state.blocks.length > 0) {
             render();
@@ -268,9 +281,19 @@
         const isoX = (x - z) * Math.cos(Math.PI / 6);
         const isoY = (x + z) * Math.sin(Math.PI / 6) - y;
         
+        // Adaptive vertical positioning for portrait mode
+        let verticalCenter;
+        if (isPortrait) {
+            // In portrait, center more carefully to account for smaller scale
+            verticalCenter = height * 0.55;
+        } else {
+            // In landscape, use traditional positioning
+            verticalCenter = height / 1.5;
+        }
+        
         // Screen Space conversion
         const screenX = width / 2 + isoX * factor;
-        const screenY = height / 1.5 + isoY * factor + state.camera.y * factor;
+        const screenY = verticalCenter + isoY * factor + state.camera.y * factor;
         
         return { x: screenX, y: screenY };
     }
@@ -402,8 +425,8 @@
 
         debris = [];
 
-        // Foundation block
-        const baseWidth = 120;
+        // Foundation block - smaller on mobile portrait
+        const baseWidth = isPortrait ? 100 : 120;
         state.blocks.push({
             x: -baseWidth/2,
             z: -baseWidth/2,
@@ -656,8 +679,14 @@
     // Don't auto start, wait for click
     // Draw initial scene
     state.currentBlock = null;
+    const initialBaseWidth = isPortrait ? 100 : 120;
     state.blocks = [{
-        x: -60, z: -60, y: 0, w: 120, d: 120, color: COLORS[0]
+        x: -initialBaseWidth/2, 
+        z: -initialBaseWidth/2, 
+        y: 0, 
+        w: initialBaseWidth, 
+        d: initialBaseWidth, 
+        color: COLORS[0]
     }];
     render();
 
