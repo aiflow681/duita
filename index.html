@@ -59,7 +59,7 @@
             color: rgba(255,255,255,0.8);
             letter-spacing: 2px;
             margin-bottom: 5px;
-            display: none; /* Make it cleaner, or show if user wants */
+            display: none;
         }
 
         #game-over-modal {
@@ -146,7 +146,6 @@
             to { transform: scale(1); opacity: 1; }
         }
 
-        /* Instructions */
         #start-hint {
             position: absolute;
             bottom: 15%;
@@ -192,16 +191,17 @@
 </div>
 
 <script>
-    // Configuration
+    // 游戏配置
     const CONFIG = {
-        zoom: 2, // Camera zoom level (smaller = further away)
-        baseSize: 50, // Logical size for calculations
-        height: 100, // Logical height of block
-        speed: 1.5, // Initial speed
+        zoom: 2,
+        baseSize: 50,
+        height: 100,
+        speed: 1.5,
         speedIncrement: 0.05,
         maxSpeed: 4.5,
     };
 
+    // 颜色配置
     const COLORS = [
         '#d32f2f', '#c2185b', '#7b1fa2', '#512da8', 
         '#303f9f', '#1976d2', '#0288d1', '#0097a7', 
@@ -209,11 +209,10 @@
         '#fbc02d', '#ffa000', '#f57c00', '#e64a19'
     ];
     
-    // Original game color palette approximation
     const BG_COLOR_TOP = '#f95240';
     const BG_COLOR_BOTTOM = '#ff8a65';
 
-    // State
+    // 游戏状态
     const state = {
         blocks: [],
         currentBlock: null,
@@ -221,12 +220,12 @@
         isRunning: false,
         gameEnded: false,
         camera: { x: 0, y: 0, z: 0, targetY: 0 },
-        axis: 'x', // 'x' or 'z'
-        direction: 1, // 1 or -1
+        axis: 'x',
+        direction: 1,
         speed: CONFIG.speed
     };
 
-    // DOM Elements
+    // DOM元素
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
     const scoreEl = document.getElementById('score');
@@ -236,35 +235,24 @@
     const startHint = document.getElementById('start-hint');
 
     let width, height;
-    let factor = 1; // logical unit to pixel
+    let factor = 1;
     let isPortrait = false;
 
+    // 调整画布大小
     function resize() {
         width = window.innerWidth;
         height = window.innerHeight;
-        
-        // Detect orientation
         isPortrait = height > width;
         
-        // Handle High DPI screens
         const dpr = window.devicePixelRatio || 1;
         canvas.width = width * dpr;
         canvas.height = height * dpr;
-        
-        // Normalize context
         ctx.scale(dpr, dpr);
         
-        // Adaptive scaling for mobile portrait mode
-        // The base block is 120 logical units wide
-        // In isometric view, it spans roughly 120 * cos(30°) ≈ 104 units horizontally
-        // We need to fit this within the screen width with some margin
         if (isPortrait) {
-            // Portrait: scale to fit the base block width (120 units) within 80% of screen width
-            // Account for isometric projection: diagonal span is larger
-            const baseBlockDiagonal = 120 * Math.sqrt(2); // ~170 units
+            const baseBlockDiagonal = 120 * Math.sqrt(2);
             factor = (width * 0.75) / baseBlockDiagonal;
         } else {
-            // Landscape: use traditional scaling
             factor = Math.min(width, height) / 400 * CONFIG.zoom;
         }
         
@@ -273,40 +261,32 @@
         }
     }
 
-    // Isometic Projection
+    // 等距投影
     function project(x, y, z) {
-        // Simple isometric projection
-        // x goes right-down, z goes left-down, y goes up
-        
         const isoX = (x - z) * Math.cos(Math.PI / 6);
         const isoY = (x + z) * Math.sin(Math.PI / 6) - y;
         
-        // Adaptive vertical positioning for portrait mode
         let verticalCenter;
         if (isPortrait) {
-            // In portrait, center more carefully to account for smaller scale
             verticalCenter = height * 0.55;
         } else {
-            // In landscape, use traditional positioning
             verticalCenter = height / 1.5;
         }
         
-        // Screen Space conversion
         const screenX = width / 2 + isoX * factor;
         const screenY = verticalCenter + isoY * factor + state.camera.y * factor;
         
         return { x: screenX, y: screenY };
     }
 
+    // 颜色亮度调整
     function colorLuminance(hex, lum) {
-        // Validate hex string
         hex = String(hex).replace(/[^0-9a-f]/gi, '');
         if (hex.length < 6) {
             hex = hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2];
         }
         lum = lum || 0;
 
-        // Convert to decimal and change luminosity
         let rgb = "#", c, i;
         for (i = 0; i < 3; i++) {
             c = parseInt(hex.substr(i*2,2), 16);
@@ -316,25 +296,16 @@
         return rgb;
     }
 
+    // 绘制方块
     function drawBlock(block, isCurrent = false) {
         const { x, y, z, w, d, color } = block;
-        
-        // We render it as a 3D box
-        //    p1-------p2
-        //   /|       /|
-        //  p4-------p3|
-        //  | p1_b----|p2_b
-        //  |/        |/
-        //  p4_b-----p3_b
-        
-        // Logical height of block visual
-        const visualHeight = 15; // Logical units
+        const visualHeight = 15;
 
         const topFace = [
-            project(x, y, z),          // back
-            project(x + w, y, z),      // right
-            project(x + w, y, z + d),  // front
-            project(x, y, z + d)       // left
+            project(x, y, z),
+            project(x + w, y, z),
+            project(x + w, y, z + d),
+            project(x, y, z + d)
         ];
         
         const bottomFace = [
@@ -344,9 +315,8 @@
             project(x, y - visualHeight, z + d)
         ];
 
-        // Draw sides
-        // Right Side (visible from front-right)
-        ctx.fillStyle = colorLuminance(color, -0.2); // Darker
+        // 绘制右侧面
+        ctx.fillStyle = colorLuminance(color, -0.2);
         ctx.beginPath();
         ctx.moveTo(topFace[1].x, topFace[1].y);
         ctx.lineTo(topFace[2].x, topFace[2].y);
@@ -355,8 +325,8 @@
         ctx.closePath();
         ctx.fill();
 
-        // Left Side (visible from front-left)
-        ctx.fillStyle = colorLuminance(color, -0.4); // Darkest
+        // 绘制左侧面
+        ctx.fillStyle = colorLuminance(color, -0.4);
         ctx.beginPath();
         ctx.moveTo(topFace[3].x, topFace[3].y);
         ctx.lineTo(topFace[2].x, topFace[2].y);
@@ -365,7 +335,7 @@
         ctx.closePath();
         ctx.fill();
 
-        // Top Face
+        // 绘制顶面
         ctx.fillStyle = color;
         ctx.beginPath();
         ctx.moveTo(topFace[0].x, topFace[0].y);
@@ -375,19 +345,18 @@
         ctx.closePath();
         ctx.fill();
 
-        // Highlight edges
         ctx.strokeStyle = "rgba(255,255,255,0.1)";
         ctx.lineWidth = 1;
         ctx.stroke();
     }
 
-    // Debris Particle System
+    // 碎片粒子系统
     let debris = [];
     function createDebris(x, z, w, d, y, color) {
         debris.push({
             x, y, z, w, d, color,
             vy: 0,
-            ay: -4, // gravity (logical units per frame^2) - increased to fall faster
+            ay: -4,
             life: 60
         });
     }
@@ -396,7 +365,7 @@
         for (let i = debris.length - 1; i >= 0; i--) {
             const p = debris[i];
             p.y += p.vy;
-            p.vy += p.ay * 0.05; // time step
+            p.vy += p.ay * 0.05;
             p.life--;
             if (p.life <= 0 || p.y < -500) {
                 debris.splice(i, 1);
@@ -408,6 +377,7 @@
         debris.forEach(p => drawBlock(p));
     }
 
+    // 初始化游戏
     function initGame() {
         state.blocks = [];
         state.score = 0;
@@ -425,7 +395,6 @@
 
         debris = [];
 
-        // Foundation block - smaller on mobile portrait
         const baseWidth = isPortrait ? 100 : 120;
         state.blocks.push({
             x: -baseWidth/2,
@@ -437,25 +406,24 @@
         });
 
         spawnNextBlock();
-        
         loop();
     }
 
+    // 生成下一个方块
     function spawnNextBlock() {
         const prevBlock = state.blocks[state.blocks.length - 1];
         const newColor = COLORS[state.blocks.length % COLORS.length];
         
         state.currentBlock = {
-            x: -200, // Placeholder
+            x: -200,
             z: -200, 
-            y: (state.blocks.length) * 15, // 15 logical units height
+            y: (state.blocks.length) * 15,
             w: prevBlock.w,
             d: prevBlock.d,
             color: newColor
         };
 
-        // Determine spawn position based on axis
-        const range = 200; // spawn distance
+        const range = 200;
         if (state.axis === 'x') {
             state.currentBlock.x = -range;
             state.currentBlock.z = prevBlock.z;
@@ -467,9 +435,10 @@
         state.direction = 1;
     }
 
+    // 放置方块
     function placeBlock() {
         if (!state.isRunning) {
-            if (state.gameEnded) return; // Wait for restart
+            if (state.gameEnded) return;
             initGame();
             return;
         }
@@ -480,11 +449,9 @@
         let delta;
         let overlap;
         
-        // Calculate overlap and cut
         if (state.axis === 'x') {
             delta = current.x - prev.x;
             
-            // Allow small margin of error for "perfect" feel
             if (Math.abs(delta) < 3) {
                 current.x = prev.x;
                 delta = 0;
@@ -494,48 +461,21 @@
                 return gameOver();
             }
             
-            // Trim
             if (delta > 0) {
-                // Slipped right
-                // ______
-                //    _______
-                //    |xx|///|
                 overlap = prev.w - delta;
                 current.w = overlap;
-                // Debris: starts at current.x + overlap, width = delta
                 createDebris(current.x + overlap, current.z, delta, current.d, current.y, current.color);
             } else if (delta < 0) {
-                 // Slipped left
                 overlap = prev.w + delta;
-                current.w = overlap;
-                current.x = prev.x; // Shift visual position to align with prev left edge
-                // Debris: starts at prev.x - abs(delta), width = abs(delta)
-                createDebris(prev.x - Math.abs(delta) + prev.w, current.z, Math.abs(delta), current.d, current.y, current.color);
-                
-                // wait, logic for left slip:
-                // Prev:   [      ]
-                // Curr: [      ]
-                // Overlap is the right part of Curr and left part of Prev.
-                // Current's effective X becomes Prev.x
-                // Current's Width becomes overlap.
-                // Debris is the left part of Curr that missed.
-                // Debris X = current.x original
-                // Debris Width = -delta
-                // Correct logic:
-                // If delta < 0 (left):
-                // keep current.x as is? No, visual must be aligned.
-                // Actual kept block: x = prev.x, w = prev.w + delta
-                // Debris: x = current.x (original), w = -delta
-                
                 const originalX = current.x;
-                current.x = prev.x; 
+                current.x = prev.x;
+                current.w = overlap;
                 createDebris(originalX, current.z, -delta, current.d, current.y, current.color);
             }
         } else {
-            // Z Axis
             delta = current.z - prev.z;
             
-             if (Math.abs(delta) < 3) {
+            if (Math.abs(delta) < 3) {
                 current.z = prev.z;
                 delta = 0;
             }
@@ -545,12 +485,10 @@
             }
             
             if (delta > 0) {
-                // Slipped "front" (z+)
                 overlap = prev.d - delta;
                 current.d = overlap;
                 createDebris(current.x, current.z + overlap, current.w, delta, current.y, current.color);
             } else if (delta < 0) {
-                // Slipped "back" (z-)
                 overlap = prev.d + delta;
                 const originalZ = current.z;
                 current.z = prev.z;
@@ -563,23 +501,20 @@
         state.score++;
         scoreEl.textContent = state.score;
         
-        // Speed up
         state.speed = Math.min(state.speed + CONFIG.speedIncrement, CONFIG.maxSpeed);
 
-        // Switch axis
         state.axis = state.axis === 'x' ? 'z' : 'x';
-        
-        // Move camera target
-        state.camera.targetY += 15; 
+        // 相机移动量要匹配方块高度，保持塔在视野中
+        state.camera.targetY += 15;
         
         spawnNextBlock();
     }
 
+    // 游戏结束
     function gameOver() {
         state.isRunning = false;
         state.gameEnded = true;
         
-        // Let the current block fall as debris
         const c = state.currentBlock;
         createDebris(c.x, c.z, c.w, c.d, c.y, c.color);
         state.currentBlock = null;
@@ -590,11 +525,12 @@
         }, 500);
     }
 
+    // 更新游戏状态
     function update() {
         if (!state.isRunning) return;
         
         const current = state.currentBlock;
-        const range = 210; // bit more than spawn range to allow overshoot
+        const range = 210;
         
         if (state.axis === 'x') {
             current.x += state.speed * state.direction;
@@ -610,25 +546,22 @@
     }
     
     function cameraLogic() {
-         state.camera.y += (state.camera.targetY - state.camera.y) * 0.1;
+        state.camera.y += (state.camera.targetY - state.camera.y) * 0.1;
     }
 
+    // 渲染游戏画面
     function render() {
-        // Clear
         ctx.clearRect(0, 0, width, height);
 
-        // Render Blocks
         state.blocks.forEach(block => drawBlock(block));
-        
-        // Render Debris
         renderDebris();
 
-        // Render Current
         if (state.currentBlock) {
             drawBlock(state.currentBlock, true);
         }
     }
 
+    // 游戏主循环
     function loop() {
         if (state.isRunning) {
             update();
@@ -642,7 +575,7 @@
         }
     }
 
-    // Input Handling
+    // 输入处理
     function handleInput(e) {
         if (e.target === restartBtn) return;
         if (state.gameEnded) return;
@@ -674,10 +607,8 @@
         initGame();
     });
 
-    // Initial Setup
+    // 初始化
     resize();
-    // Don't auto start, wait for click
-    // Draw initial scene
     state.currentBlock = null;
     const initialBaseWidth = isPortrait ? 100 : 120;
     state.blocks = [{
