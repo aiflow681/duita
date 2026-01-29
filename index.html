@@ -193,7 +193,7 @@
 <script>
     // 游戏配置
     const CONFIG = {
-        zoom: 2,
+        zoom: 1.5,
         baseSize: 50,
         height: 100,
         speed: 1.5,
@@ -251,7 +251,7 @@
         
         if (isPortrait) {
             const baseBlockDiagonal = 120 * Math.sqrt(2);
-            factor = (width * 0.75) / baseBlockDiagonal;
+            factor = (width * 0.6) / baseBlockDiagonal;
         } else {
             factor = Math.min(width, height) / 400 * CONFIG.zoom;
         }
